@@ -1,7 +1,25 @@
 (function _yourlsOptions () {
 	
+	// Promiseラッパー
+	function sendMessagePromise(message) {
+	  return new Promise((resolve, reject) => {
+		chrome.runtime.sendMessage(message, (response) => {
+		  if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+		  else resolve(response);
+		});
+	  });
+	}
+	function getStoragePromise() {
+	  return new Promise((resolve, reject) => {
+		chrome.storage.local.get(null, (result) => {
+		  if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+		  else resolve(result);
+		});
+	  });
+	}
+	
 	var loadOptions = function(e) {
-		browser.storage.local.get().then(function _gotOptions(result) {
+		getStoragePromise().then(function _gotOptions(result) {
 			document.querySelector('#api').value = result.api || '';
 			document.querySelector('#signature').value = result.signature || '';
 			document.querySelector('#maxwait').value = result.maxwait || '4';
@@ -43,7 +61,7 @@
 				
 				document.querySelector('#signature').value = settings['signature'];
 				
-				browser.runtime.sendMessage({method: "version", settings: settings}, function (response)
+				sendMessagePromise({method: "version", settings: settings}).then(function (response)
 				{
 					if (!response.error) {
 						msg_title.textContent = "Success!";

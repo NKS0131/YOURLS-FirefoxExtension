@@ -42,7 +42,7 @@
 		
 		updateResult("", 'Contacting server...');
 		
-		browser.runtime.sendMessage({method: "shortenLink", url: long_url, keyword: keyword}).then (function (response)
+		sendMessagePromise({method: "shortenLink", url: long_url, keyword: keyword}).then (function (response)
 		{
 			if (response.url) {
 				updateResult (response.url, "", settings.copy);
@@ -57,7 +57,7 @@
 		if (settings.api && settings.signature) {
 			var _haveTab = function(tabs) {
 				
-				browser.runtime.sendMessage({method: "getLinkTarget"}).then (function (response) {
+				sendMessagePromise({method: "getLinkTarget"}).then (function (response) {
 					var long_url = tabs[0].url;
 					if (response.linkTarget) {
 						long_url = response.linkTarget;
@@ -72,7 +72,7 @@
 					);
 					
 					if (settings.keyword) {
-						browser.runtime.sendMessage({method: "getSelection"}).then (function (response) {
+						sendMessagePromise({method: "getSelection"}).then (function (response) {
 							document.getElementById('keyword').value = response.selection;
 						}, function (error) {updateError ("Communication error within the extension!", communicationErrorMsg);});
 						
@@ -96,7 +96,7 @@
 				updateSource('Cannot get current tab URL!');
 				updateResult('Error:' + error.message, "");
 			};
-			browser.tabs.query({active: true, currentWindow: true}).then(_haveTab, _tabQueryError);
+			tabsQueryPromise({active: true, currentWindow: true}).then(_haveTab, _tabQueryError);
 		} else {
 			updateSource('Extension not configured');
 			updateResult('Go to about:addons', "");
@@ -128,11 +128,15 @@
 	document.getElementById('settings').addEventListener(
 		'click',
 		function(se) {
-			browser.runtime.openOptionsPage();
+			if (chrome.runtime.openOptionsPage) {
+				chrome.runtime.openOptionsPage();
+			} else {
+				window.open('options.html');
+			}
 		}
 	);
 	
-	browser.storage.local.get().then(_gotSettings, _optionsError);
+	getStoragePromise().then(_gotSettings, _optionsError);
 })();
 
 

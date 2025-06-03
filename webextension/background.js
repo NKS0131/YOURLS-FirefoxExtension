@@ -1,116 +1,68 @@
-
-browser.contextMenus.create({
-	id: "yourls",
-	title: "Shorten URL",
-	contexts: ["all"]
+chrome.contextMenus.create({
+  id: "yourls",
+  title: "Shorten URL",
+  contexts: ["all"]
 });
 
-
-
-function getSelectionText() {
-	var text = "";
-	if (window.getSelection) {
-		text = window.getSelection().toString();
-	} else if (document.selection && document.selection.type != "Control") {
-		text = document.selection.createRange().text;
-	}
-	return text;
+// content scriptで選択テキストを取得する関数
+function getSelectionTextInTab(tabId) {
+  return chrome.scripting.executeScript({
+    target: { tabId },
+    func: () => window.getSelection ? window.getSelection().toString() : ''
+  }).then(results => results[0]?.result || '');
 }
 
-function getLinkTarget() {
-  if (document.activeElement && document.activeElement.tagName.toLowerCase() === 'a' && document.activeElement.href) {
-    return document.activeElement.href;
+// content scriptでリンクターゲットを取得する関数
+function getLinkTargetInTab(tabId) {
+  return chrome.scripting.executeScript({
+    target: { tabId },
+    func: () => {
+      const el = document.activeElement;
+      return (el && el.tagName && el.tagName.toLowerCase() === 'a' && el.href) ? el.href : '';
+    }
+  }).then(results => results[0]?.result || '');
+}
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === "yourls") {
+    // manifest v3では service worker から popup を直接開けないため、
+    // 必要に応じてメッセージ送信やUI設計の見直しが必要
+    // chrome.action.openPopup() はサポートされていません
+    // ここでは何もしない、または通知を出す等の対応が必要
+    // chrome.action.openPopup(); // ← v3非対応
   }
-	return '';
-}
-
-
-
-browser.contextMenus.onClicked.addListener((info, tab) => {
-	if (info.menuItemId === "yourls") {
-		browser.browserAction.openPopup();
-	}
 });
 
-
-
-browser.runtime.onMessage.addListener (function(request, sender, sendResponse)
-{
-	if (request.method == "shortenLink")
-	{
-		browser.storage.local.get().then(  function(settings) {
-			
-			var options = {
-				action: 'shorturl',
-				format: 'simple',
-				url: request.url,
-				signature: settings.signature
-			};
-			if (request.keyword)
-				options.keyword = request.keyword;
-			
-			
-			YOURLS (settings, options).then(function(result) {
-				sendResponse (result);
-			}, function(error) {
-				sendResponse (error);
-			});
-		}, function (error) {
-			sendResponse ({errror: "did not find settings"});
-		});
-		
-		return true;
-	}
-	else if (request.method == "getSelectionInTab" || request.method == "getSelection")
-	{
-		chrome.tabs.executeScript({
-			code: '(' + getSelectionText.toString() + ')()'
-		}, function (results) {
-			if (Array.isArray (results) && results.length == 1)
-				sendResponse ({selection: results[0]});
-			else
-				sendResponse ({selection: ""});
-		});
-		return true;
-	}
-	else if (request.method == "getLinkTarget")
-	{
-		chrome.tabs.executeScript({
-			code: '(' + getLinkTarget.toString() + ')()'
-		}, function (results) {
-			if (Array.isArray (results) && results.length == 1)
-				sendResponse ({linkTarget: results[0]});
-			else
-				sendResponse ({linkTarget: ""});
-		});
-		return true;
-	}
-	else if (request.method == "version")
-	{
-		var settings = request.settings;
-		YOURLS(settings,
-					 {
-						 action: 'version',
-				 signature: settings.signature,
-					 },
-				 '^.*<version>(\\d+\\.\\d+.*)<\\/version>.*$'
-		).then(function(result) {
-			browser.storage.local.set(settings);
-			sendResponse (result);
-		}, function(error) {
-			sendResponse (error);
-		});
-		return true;
-	}
-	
-	return false;
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.method === "shortenLink") {
+    chrome.storage.local.get().then(settings => {
+      const options = {
+        action: 'shorturl',
+        format: 'simple',
+        url: request.url,
+        signature: settings.signature
+      };
+      if (request.keyword) options.keyword = request.keyword;
+      YOURLS(settings, options).then(result => sendResponse(result), error => sendResponse(error));
+    });
+    return true;
+  } else if (request.method === "getSelectionInTab" || request.method === "getSelection") {
+    getSelectionTextInTab(sender.tab.id).then(selection => sendResponse({ selection }));
+    return true;
+  } else if (request.method === "getLinkTarget") {
+    getLinkTargetInTab(sender.tab.id).then(linkTarget => sendResponse({ linkTarget }));
+    return true;
+  } else if (request.method === "version") {
+    const settings = request.settings;
+    YOURLS(settings, { action: 'version', signature: settings.signature }, '^.*<version>(\\d+\\.\\d+.*)<\\/version>.*$')
+      .then(result => {
+        chrome.storage.local.set(settings);
+        sendResponse(result);
+      }, error => sendResponse(error));
+    return true;
+  }
+  return false;
 });
-
-
-
-
-
-
 
 function YOURLS(settings, options, expected) {
 	

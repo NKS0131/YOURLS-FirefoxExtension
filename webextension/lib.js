@@ -41,7 +41,11 @@ function injectSupplemental (node, supp) {
 						settingslink.addEventListener(
 							'click',
 							function(se) {
-								browser.runtime.openOptionsPage();
+								if (chrome.runtime.openOptionsPage) {
+									chrome.runtime.openOptionsPage();
+								} else {
+									window.open('options.html');
+								}
 							}
 						);
 						node.appendChild (settingslink);
